@@ -1,0 +1,1 @@
+import{_ as e,B as t,o as s,c as o,e as n,a}from"./index-d9640f9f.js";const c={components:{Banner:t},setup(){return{}}},r=a("div",{style:{"font-size":"200px"}},"테테테테테",-1);function d(p,_,u,i,f,l){return s(),o("div",null,[n(" study 입니다. "),r])}const x=e(c,[["render",d]]);export{x as default};
