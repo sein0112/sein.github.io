@@ -1,141 +1,70 @@
-현재 회사에서는 Vue 프레임워크를 사용하지만 vuetify는 사용하지 못한다. 그래서 기본적인 컴포넌트들도 직접 html과 css로 만들고 있다.
-어느날 약 40문항이 있는 설문지 같은 화면을 개발해야했다. 경험상 label이 붙는 input은 어렵진 않지만 코드는 길어지고 계속 id와 for로 짝을 지어줘야해서 아주 귀찮으면서도 손 많이가는 작업이라고 생각한다.
-그동안은 화면에서 1~2개 그룹 이상은 쓰이지 않아서 그냥 input-label로 계속 개발했는데 이참에 다른 개발자들의 편의를 생각해서라도 라디오그룹용 컴포넌트를 하나 만들어야 겠다고 생각했다.
+Vuejs에서 검색필터를 유지하기위해 session stories에 검색 params를 저장하고 꺼내서 쓰는 방식을 이용했다.
 
-## 라디오그룹 컴포넌트 만들기
-내가 생각한 구조는 일단 ```Array```에 ```value```와 ```label```의 값이 들어있는 ```Object```형태로, 해당 라디오그룹의 ```select``` 값은 ```v-model```로 주고받는 구조였다.
-``` html
-// Main.vue
-<base-radio-group
-	:data-items="[{value : 'Dog', label: '강아지'}, 
-    			  {value : 'Cat', label: '고양이'}, 
-                  {value : 'Bear', label: '곰'}]"
-    v-model="petAns">
-</base-radio-group>
+검색필터가 단순 input이거나 정적인 데이터로 검색하는 경우에는 간편하게 적용 할 수 있었다.
+하지만 점점 복잡해지고 필터의 종류가 많아지면서 다양한 문제점이 나타났다.
+
+### 1. 필터영역을 만들기 위한 API의 response를 전부 기다려야한다.
+검색영역을 만들어주기 위한 API call이 많아지면서 필터된 데이터를 받는데까지 쓸데없는 비용이 들기 시작했다.
+
+input이나 간단한 true, false 조건의 필터는 상관없었다. 하지만 검색필터의 구성이 API response로 구성되어야하는 필터들이 늘어나면서 API call에 대한 비용이 많아지고 내가 진짜 보고싶던 필터된 데이터를 보기까지의 시간도 더 길어졌다.
+
+> 검색필터를 구성하기 위한 여러 종류의 API call -> 필터 영역에 이전 검색필터 데이터 세팅 -> 필터가 된 데이터 API call
+ 
+
+### 2. 검색필터 API도 동기처리를 해야하나?
+필터들 중 하나인 필터A는 select box로, 특정 API의 response로 받는 데이터로 구성을 해야했다. 
+또 다른 필터B는 필터A에서 선택된 데이터로 B필터의 select box를 재구성해야했다.
+그래서 필터A에는 select 가 변경될 때마다 B필터의 API를 call하는 로직을 갖고있었다.
+처음에 검색필터가 순서대로 A->B를 선택했을경우에는 아무 문제가 없었지만
+이전 검색필터를 A와 B에 동시에 세팅되었는데, 필터 A에는 select가 변경될때 마다 필터B의 API를 계속 call 하도록 되어 있었기 때문에 필터B의 데이터가 계속 사라지는 현상이 있었다.
+
+> 필터A, 필터B에 이전 필터값 세팅-> 필터 A의 select가 변경되어 필터B API call이 실행됨 -> B의 select box 구성이 업데이트 되면서 B의 select였던 값이 사라짐
+
+물론 하나하나 예외처리를 해줄 수는 있었지만 앞서 말했듯이 검색조건이 많아지고 다양해지면서 하나하나 관리해주기가 굉장히 어려워져버렸다.
+
+
+### 3. 중복 호출
+input 필터는 enter key를 통해 검색 이벤트가 실행되어 문제가 없었지만 radio button, check box, select box 등 일부 검색필터에는 데이터 변경이 일어날때 이벤트가 실행되게 되어있었다.
+
+마찬가지로 위와 같은 경우에 만약 n가지의 검색필터가 모두 radio button, check box, select box로만 구성되어 있었다면 n번의 검색조건이 실행 되어버렸다. 
+
+> radio button 필터 -> 나 이전값 세팅돼서 데이터 변화됨! -> 검색 API call 1번째
+check box 필터 -> 나 이전값 세팅돼서 데이터 변화됨! -> 검색 API call 2번째
+select box 필터 -> 나 이전값 세팅돼서 데이터 변화됨! -> 검색 API call 3번째
+
+이역시도 예외처리로 check box가 검색조건에 있는 경우는 API call를 더이상 하지 않는다는 등의 처리로 해결할 수 있지만 마찬가지로 임시방편일 뿐 장기적으로는 불편해질게 분명하다고 생각했다.
+
+(이부분은 사실 다른 방법으로 해결하긴 했다. template영역에 바로 v-model혹은 value를 세팅해주면 n번이 실행되는건 막을 수 있었지만 근본적인 해결책이 아니라고 생각했다.)
+
+ 
+
+다른데선 검색필터를 어떻게 유지하는지 검색을 해봤지만 대부분이 나처럼 sessionstorise에 저장하고 꺼내쓰는 방식을 이용했다. 그러던 중 등록화면의 데이터들을 유지시켜주기위해 썼던 keep-alive의 기능이 생각났다. 얘를 이용해서 view 컴포넌트 자체를 캐싱해버리면 어떨까?
+
+ 
+
+### 동적컴포넌트들을 캐싱해주는 keep-alive
+```
+<component :is="isHot ? 'hotMemo' : 'coldMemo'" />
+```
+keep-alive는 동적인 컴포넌트들의 데이터를 캐싱으로 유지시켜주는 기능을 한다.
+가이드에서는 compnent :is에 대한 예시만 나와있어서 v-if-else일때만 쓸 생각했는데, router-view도 적용될 거란 생각이 뒤늦게 떠올랐다.
+```
+<keep-alive
+    :include="/List\b/" 
+    :max="1">
+  <router-view></router-view>
+</keep-alive>
 ```
 
-``` html
-// BaseRadioGroup.vue
-<template>
-  <span v-for="(item, index) in dataItems" :key="item.value">
-    <input type="radio"
-           :id="`${randomId}_${index}`"
-           :value="item.value"
-           :checked="item.value === value"
-           @change="$emit('m-change', $event.target.value)"
-    >
-    <label :for="`${randomId}_${index}`">{{ item.label }}</label>
-  </span>
-</template>
+자세한 내용은 공식문서에 잘 나와있지만 keep-alive의 props를 통해 캐싱할 페이지의 수나 캐싱할 페이지에 대한 정규식도 세울 수 있다. 위 코드의 경우에는 name이 List로 끝나는 컴포넌트만 캐싱하고, 최대 1개만 캐싱한다.
 
-<script>
-export default {
-  name: 'BaseRadioGroup',
-  model: {
-    prop: 'value',
-    event: 'm-change'
-  },
-  props: {
-    value : { },
-    dataItems: {
-      type : Array,
-      required : false,
-      default: function (){
-        return[
-          {value: "Y", label: "Yes"},
-          {value: "N", label: "No"},
-        ]
-      }
-    }
-  },
-  created () {
-    this.randomId = Math.random() * 1000000000000
-  },
-  data () {
-    return {
-      randomId : ''
-    }
-  },
-}
-</script>
-```
+즉, ```<메모List>``` 에서 ```<메모Info>``` 컴포넌트로 이동했다면 ```<메모List>```는 현재 캐싱되어 있는 상태다.
+```<메모Info>``` 는 List로 끝나지 않는 컴포넌트이기 때문에 캐싱되지 않았고, 다시 ```<메모List>``` 로 돌아갔을 때 검색필터든 UI든 모두 그대로 남아있는걸 확인 할 수 있었다.
 
-```randomId```는 원래 생각지도 못했는데 dataItems의 index로 id를 세팅해주니 한 화면에서 ```<base-radio-group>``` 을 사용하니 id가 겹쳐버렸다. 그래서 random으로 id를 생성해서 컴포넌트별로 각각의 id를 가지도록 했다.
 
-## 라디오그룹 컴포넌트 옵션 추가하기
-쓰다보니 disabled 조건도 필요하고 다국어도 처리해야하고 dataItems Array의 구조를 계속 value와 label형태로 만들어주는게 너무 번거로웠다. 그래서 컴포넌트를 좀 더 편리하게 쓰기위해 다양한 props를 추가하여 사용성을 높였다.
-``` html
-// Main.vue
-<base-radio-group
-    :data-items="[ {code: '01', ko: '강아지', en: 'dog' },
-                    {code: '02', ko: '고양이', en: 'cat'},
-                    {code: '03', ko: '곰', en: 'bear'}]"
-    :disabed="!hasPet"
-    :value-field="'code'"
-    :label-field="$t('pet.text')"
-    v-model="petCode">
-</base-radio-group>
-```
-``` html
-// BaseRadioGroup.vue
-<template>
-  <span v-for="(item, index) in dataItems" :key="item.value">
-    <input type="radio"
-           :id="`${randomId}_${index}`"
-           :disabled="disabled"
-           :value="valueField ? item[valueField] : item.value"
-           :checked="valueField ? item[valueField] : item.value) === value"
-           @change="$emit('m-change', $event.target.value)"
-    >
-    <label :for="`${randomId}_${index}`">
-      {{ labelField ? item[labelField] : item.label}}
-    </label>
-  </span>
-</template>
+여기서 끝이 아니라, 만약에 검색조건은 유지하고 싶지만 시간이 지난뒤 만약 새로운 데이터가 추가되었다면 목록으로 들어왔을때 그 데이터가 추가된 목록으로 업데이트가 되었을 수도 있다. 그럴때는 keep-alive의 생명주기인 activated를 이용하면 된다. 캐싱된 컴포넌트가 다시 그려질때는 우리가 일반적으로 알고있는 created~시작점이 아닌 activated로 들어오게 된다. activated에서만 검색 API call만 한번 더 해주면 된다.
+(※activated의 반대 개념인 deactivated도 있다!)
 
-<script>
-export default {
-  name: 'BaseRadioGroup',
-  model: {
-    prop: 'value',
-    event: 'm-change'
-  },
-  props: {
-    value : {},
-    disabled : {
-      type : Boolean,
-      default : false
-    },
-    dataItems: {
-      type : Array,
-      default: function (){
-        return[
-          {value: "Y",label: "Yes"},
-          {value: "N",label: "No"}
-        ]
-      }
-    },
-    labelField : {
-      type : String,
-      default : 'label'
-    },
-    valueField : {
-      type : String,
-      default : 'value'
-    }
-  },
-  mounted () {
-    this.randomId = Math.random() * 10000
-  },
-  data () {
-    return {
-      randomId : '',
-    }
-  },
-}
-</script>
-```
 
-이외에도 click event를 추가하는 등 더 다양한 기능을 만들었지만 이정도만 있어도 개발할 때 더 확실해 편해지리라고 확신한다. 설문지를 다 개발한 후에 dataItems는 그대론데 형태만 selectbox로 바꿔달라는 요구사항이 들어왔다. selectbox는 이미 위와 같은 구조의 컴포넌트가 있었기 때문에 props들은 다 그대로 두고 컴포넌트만 바꿔주기만 해도 되서 ```<base-radio-group>```을 만들기 아주 잘했다는 생각이 든다!
-
-다음에는 input-label의 영원한 짝궁.. checkbox에 대한 컴포넌트도 만들어보고자한다.
+이로써 keep-alive 추가라는 간단한 방법으로 검색필터는 모두 유지되면서 목록만 업데이트 되게 개발 할 수 있다!
+(sessionstories에 저장하고 세팅해주는 수고스러움이 없다는게 너무너무 좋다.)
