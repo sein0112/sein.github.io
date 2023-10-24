@@ -43,12 +43,12 @@ select box 필터 -> 나 이전값 세팅돼서 데이터 변화됨! -> 검색 A
  
 
 ### 동적컴포넌트들을 캐싱해주는 keep-alive
-```
+``` html
 <component :is="isHot ? 'hotMemo' : 'coldMemo'" />
 ```
 keep-alive는 동적인 컴포넌트들의 데이터를 캐싱으로 유지시켜주는 기능을 한다.
 가이드에서는 compnent :is에 대한 예시만 나와있어서 v-if-else일때만 쓸 생각했는데, router-view도 적용될 거란 생각이 뒤늦게 떠올랐다.
-```
+``` html
 <keep-alive
     :include="/List\b/" 
     :max="1">
